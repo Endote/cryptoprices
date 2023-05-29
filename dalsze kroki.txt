@@ -1,0 +1,2 @@
+1. parser scientific notation  to big int
+2. parser rest of data to int for ml
