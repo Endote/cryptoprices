@@ -1,10 +1,8 @@
-from binance.api import API
 from keras.layers import LSTM, Dense, Dropout
 from keras.models import load_model
 from keras.models import Sequential
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-import binance
 import numpy as np
 import os
 import pandas as pd
@@ -16,16 +14,16 @@ import time
 class Binance:
 
     def __init__(self, api_key, api_secret):
-        # Define how many previous days of data we want to use to predict the next data point
-        self.look_back = 100
         self.api_key = api_key
         self.api_secret = api_secret
-        self.model = load_model('model.h5')
-        if self.model is None:
-            self.model = Sequential()
-            self.model.add(LSTM(50, input_shape=(1, self.look_back)))
-            self.model.add(Dropout(0.2))
-            self.model.add(Dense(1))
+
+        if load_model('model.h5') is None:
+            print('Model being built')
+            # self.model = self.build_model()
+            pass
+        else:
+            print('Model loaded')
+            self.model = load_model('model.h5')
         print('constructed')
 
     def exchange_info(self):
@@ -56,7 +54,7 @@ class Binance:
         print(self.tokens)
 
         # Function to create dataset
-    def create_dataset(self, dataset, look_back=1):
+    def create_dataset(self, dataset, look_back=10):
         X, Y = [], []
         for i in range(len(dataset) - look_back - 1):
             a = dataset[i:(i + look_back), 0]
@@ -64,69 +62,78 @@ class Binance:
             Y.append(dataset[i + look_back, 0])
         return np.array(X), np.array(Y)
 
-### DATA
-
-
-
-
-# Enter your Binance API key and API secret here
-api_key = '7ADjwVTbIBk9LZHWuDTjJJncrzkCfWzygsnUDJYKYkVoghyNaUYkY7qajWasK3fj'
-api_secret = 'xm9ViUOA2Yw8KAZl8yIg9UxboDYrNjsoQv1qqcNHQK8kSsIXCeRQ5gFx2gkPji6j'
-
-client = Binance(api_key, api_secret)
-
-client.get_tokens()
-
-scaler = MinMaxScaler()
-
-# data_close = client.tokens[2]['Close'].values.reshape(-1,1)
-
-data_close = client.tokens[2]['Close'].values
-data = scaler.fit_transform(data_close.reshape(-1, 1))
-
-
-# Split the data into training and test datasets
-data_X, data_Y = client.create_dataset(data, look_back)
-X_train, X_test, Y_train, Y_test = train_test_split(data_X, data_Y, test_size=0.2, random_state=42)
+    def build_model(data, look_back=10):
+        # Split the data into training and test datasets
+        data_X, data_Y = client.create_dataset(data, look_back)
+        X_train, X_test, Y_train, Y_test = train_test_split(data_X, data_Y, test_size=0.2, shuffle=False)
 
 # Reshape input to be [samples, time steps, features]
-X_train = np.reshape(X_train, (X_train.shape[0], 1, X_train.shape[1]))
-X_test = np.reshape(X_test, (X_test.shape[0], 1, X_test.shape[1]))
-
-print(X_train)
-print(Y_train)
-
+        X_train = np.reshape(X_train, (X_train.shape[0], 1, X_train.shape[1]))
+        X_test = np.reshape(X_test, (X_test.shape[0], 1, X_test.shape[1]))
 
 ### MODEL
 
 # Create the LSTM model
-model = Sequential()
-model.add(LSTM(50, input_shape=(1, look_back)))
-model.add(Dropout(0.2))
-model.add(Dense(1))
+        self.model = Sequential()
+        self.model.add(LSTM(50, input_shape=(1, look_back)))
+        self.model.add(Dropout(0.2))
+        self.model.add(Dense(1))
 
 # Compile the model
-model.compile(loss='mean_squared_error', optimizer='adam')
+        self.model.compile(loss='mean_squared_error', optimizer='adam')
 
 
 # Train the model
-model.fit(X_train, Y_train, epochs=100, batch_size=64, verbose=1)
+        self.model.fit(X_train, Y_train, epochs=100, batch_size=64, verbose=1)
+        self.model.fit(X_train, Y_train, epochs=100, verbose=1)
+
 
 
 # Make predictions
-train_predict = model.predict(X_train)
-test_predict = model.predict(X_test)
+        train_predict = self.model.predict(X_train)
+        test_predict = self.model.predict(X_test)
 
 # Invert predictions to get the actual price
-train_predict = scaler.inverse_transform(train_predict)
-Y_train = scaler.inverse_transform([Y_train])
+        train_predict = scaler.inverse_transform(train_predict)
+        Y_train = scaler.inverse_transform([Y_train])
 
-test_predict = scaler.inverse_transform(test_predict)
-Y_test = scaler.inverse_transform([Y_test])
+        test_predict = scaler.inverse_transform(test_predict)
+        Y_test = scaler.inverse_transform([Y_test])
+
+        self.model.save('model_'+look_back+'.h5')
+
+if __name__ == '__main__':
+# Define how many previous days of data we want to use to predict the next data point
+
+
+# Enter your Binance API key and API secret here
+    api_key = '7ADjwVTbIBk9LZHWuDTjJJncrzkCfWzygsnUDJYKYkVoghyNaUYkY7qajWasK3fj'
+    api_secret = 'xm9ViUOA2Yw8KAZl8yIg9UxboDYrNjsoQv1qqcNHQK8kSsIXCeRQ5gFx2gkPji6j'
+
+    client = Binance(api_key, api_secret)
+
+    client.get_tokens()
+
+    scaler = MinMaxScaler()
+
+# data_close = client.tokens[2]['Close'].values.reshape(-1,1)
+
+    data_close = client.tokens[2]['Close'].values
+    data = scaler.fit_transform(data_close.reshape(-1, 1))
+
+    self.build_model(data)
+
+
+
 
 # Print the predictions
-print('Train Predicted:', train_predict)
-print('Test Predicted:', test_predict)
+    # print('Train Predicted:', train_predict[-1])
+    print('Test Predicted:', test_predict)
+
+    print(len(test_predict))
+
+    print('ACTUAL\n\n\n')
+    print(client.tokens[2][-519:])
 
 
 
